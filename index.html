@@ -3,13 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Al-Mujahidin Blockly Arduino</title>
+    <title>Al-Mujahidin Blockly</title>
     <script src="https://unpkg.com/blockly/blockly.min.js"></script>
     
     <style>
         html, body { font-family: sans-serif; margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; background-color: #f5f5f5; }
         .header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background-color: #ffffff; border-bottom: 2px solid #ccc; }
-        .header h1 { margin: 0; color: #00979D; font-size: 24px; }
+        .header h1 { margin: 0; color: #00979D; font-size: 24px; font-weight: bold; }
+        
+        /* Styling untuk Dropdown Board */
+        .board-select {
+            padding: 8px 15px; font-size: 16px; border-radius: 4px;
+            border: 2px solid #00979D; background-color: white; color: #333;
+            font-weight: bold; cursor: pointer; outline: none;
+        }
+        .board-select:hover { background-color: #f0fcfc; }
+        
         .status-badge { background-color: #e8f5e9; color: #2e7d32; padding: 8px 15px; border-radius: 20px; font-weight: bold; font-size: 14px; display: flex; align-items: center; gap: 8px; border: 1px solid #a5d6a7; }
         .status-dot { width: 10px; height: 10px; background-color: #4caf50; border-radius: 50%; animation: pulse 2s infinite; }
         @keyframes pulse { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(76, 175, 80, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); } }
@@ -28,8 +37,16 @@
 <body>
 
     <div class="header">
-        <h1>Editor Visual Arduino</h1>
+        <h1>Al-Mujahidin Blockly</h1>
         <div style="display: flex; gap: 15px; align-items: center;">
+            <select id="boardSelect" class="board-select" onchange="boardChanged()">
+                <option value="uno">Arduino Uno</option>
+                <option value="esp8266">ESP8266 12E (NodeMCU)</option>
+                <option value="esp32">ESP32 Classic</option>
+                <option value="esp32s2">ESP32 S2</option>
+                <option value="esp32s3">ESP32 S3</option>
+            </select>
+            
             <div class="status-badge">
                 <div class="status-dot"></div>
                 Live Auto-Generate
@@ -50,27 +67,14 @@
 
     <xml id="toolbox" style="display: none">
         <category name="Robot ZK-5AD" colour="35">
-            <block type="zk5ad_init">
-                <value name="PIN1"><shadow type="math_number"><field name="NUM">5</field></shadow></value>
-                <value name="PIN2"><shadow type="math_number"><field name="NUM">6</field></shadow></value>
-                <value name="PIN3"><shadow type="math_number"><field name="NUM">9</field></shadow></value>
-                <value name="PIN4"><shadow type="math_number"><field name="NUM">10</field></shadow></value>
-            </block>
+            <block type="zk5ad_init"></block>
             <block type="zk5ad_kecepatan">
                 <value name="SPEED"><shadow type="math_number"><field name="NUM">255</field></shadow></value>
             </block>
-            <block type="zk5ad_maju">
-                <value name="PUTARAN"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
-            </block>
-            <block type="zk5ad_mundur">
-                <value name="PUTARAN"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
-            </block>
-            <block type="zk5ad_kanan">
-                <value name="DERAJAT"><shadow type="math_number"><field name="NUM">90</field></shadow></value>
-            </block>
-            <block type="zk5ad_kiri">
-                <value name="DERAJAT"><shadow type="math_number"><field name="NUM">90</field></shadow></value>
-            </block>
+            <block type="zk5ad_maju"></block>
+            <block type="zk5ad_mundur"></block>
+            <block type="zk5ad_kanan"></block>
+            <block type="zk5ad_kiri"></block>
             <block type="zk5ad_berhenti"></block>
         </category>
 
@@ -115,6 +119,11 @@
 
         <category name="Pin I/O & Waktu" colour="230">
             <block type="arduino_digital_write"></block>
+            <block type="arduino_digital_read"></block>
+            <block type="arduino_analog_write">
+                <value name="VAL"><shadow type="math_number"><field name="NUM">128</field></shadow></value>
+            </block>
+            <block type="arduino_analog_read"></block>
             <block type="arduino_delay"></block>
         </category>
         
@@ -126,21 +135,66 @@
     </xml>
 
     <script>
+        // ==========================================
+        // 0. DATA PIN BOARD DINAMIS
+        // ==========================================
+        const pinMaps = {
+            'uno': {
+                digital: [["0","0"],["1","1"],["2","2"],["3","3"],["4","4"],["5","5"],["6","6"],["7","7"],["8","8"],["9","9"],["10","10"],["11","11"],["12","12"],["13","13"],["A0","A0"],["A1","A1"],["A2","A2"],["A3","A3"],["A4","A4"],["A5","A5"]],
+                analogWrite: [["3","3"],["5","5"],["6","6"],["9","9"],["10","10"],["11","11"]],
+                analogRead: [["A0","A0"],["A1","A1"],["A2","A2"],["A3","A3"],["A4","A4"],["A5","A5"]]
+            },
+            'esp8266': {
+                digital: [["D0 (16)","16"],["D1 (5)","5"],["D2 (4)","4"],["D3 (0)","0"],["D4 (2)","2"],["D5 (14)","14"],["D6 (12)","12"],["D7 (13)","13"],["D8 (15)","15"],["RX (3)","3"],["TX (1)","1"]],
+                analogWrite: [["D1 (5)","5"],["D2 (4)","4"],["D3 (0)","0"],["D4 (2)","2"],["D5 (14)","14"],["D6 (12)","12"],["D7 (13)","13"],["D8 (15)","15"]],
+                analogRead: [["A0","A0"]]
+            },
+            'esp32': {
+                // Pin 34, 35, 36, 39 hanya bisa INPUT, tidak bisa OUTPUT
+                digital: [["0","0"],["2","2"],["4","4"],["5","5"],["12","12"],["13","13"],["14","14"],["15","15"],["16","16"],["17","17"],["18","18"],["19","19"],["21","21"],["22","22"],["23","23"],["25","25"],["26","26"],["27","27"],["32","32"],["33","33"],["34 (In)","34"],["35 (In)","35"],["36 (In)","36"],["39 (In)","39"]],
+                analogWrite: [["2","2"],["4","4"],["5","5"],["12","12"],["13","13"],["14","14"],["15","15"],["16","16"],["17","17"],["18","18"],["19","19"],["21","21"],["22","22"],["23","23"],["25","25"],["26","26"],["27","27"],["32","32"],["33","33"]],
+                analogRead: [["32","32"],["33","33"],["34","34"],["35","35"],["36","36"],["39","39"]]
+            },
+            'esp32s2': {
+                digital: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,26,33,34,35,36,37,38,39,40,41,42,46].map(String).map(x => [x,x]),
+                analogWrite: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,26,33,34,35,36,37,38,39,40,41,42].map(String).map(x => [x,x]),
+                analogRead: [1,2,3,4,5,6,7,8,9,10].map(String).map(x => [x,x])
+            },
+            'esp32s3': {
+                digital: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,35,36,37,38,39,40,41,42,43,44,45,46,47,48].map(String).map(x => [x,x]),
+                analogWrite: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,35,36,37,38,39,40,41,42,43,44,45,46,47,48].map(String).map(x => [x,x]),
+                analogRead: [1,2,3,4,5,6,7,8,9,10].map(String).map(x => [x,x])
+            }
+        };
+
+        // Fungsi pembantu untuk memuat dropdown dinamis
+        function getDigitalPins() { return pinMaps[document.getElementById('boardSelect').value].digital; }
+        function getAnalogWritePins() { return pinMaps[document.getElementById('boardSelect').value].analogWrite; }
+        function getAnalogReadPins() { return pinMaps[document.getElementById('boardSelect').value].analogRead; }
+
+        function boardChanged() {
+            // Memaksa blok untuk merender ulang pilihan pin sesuai board yang aktif
+            var allBlocks = workspace.getAllBlocks(false);
+            allBlocks.forEach(b => {
+                if(b.type.startsWith('arduino_') || b.type === 'zk5ad_init') {
+                    // Refresh dummy untuk memicu evaluasi ulang dropdown UI Blockly
+                }
+            });
+            generateArduinoCode();
+        }
+
         const TYPES = [["int", "int"], ["String", "String"], ["float", "float"], ["bool", "bool"]];
         const RET_TYPES = [["void", "void"], ["int", "int"], ["String", "String"], ["float", "float"], ["bool", "bool"]];
 
         // ==========================================
-        // 1. DEFINISI BENTUK BLOK (KUSTOM)
+        // 1. DEFINISI BENTUK BLOK (JSON STATIS)
         // ==========================================
         const customBlocks = [
-            { "type": "zk5ad_init", "message0": "🤖 ZK-5AD Init Pin | PIN1 %1 | PIN2 %2 | PIN3 %3 | PIN4 %4", "args0": [ {"type": "input_value", "name": "PIN1"}, {"type": "input_value", "name": "PIN2"}, {"type": "input_value", "name": "PIN3"}, {"type": "input_value", "name": "PIN4"} ], "previousStatement": null, "nextStatement": null, "colour": 35, "tooltip": "Tentukan pin PWM untuk motor." },
             { "type": "zk5ad_kecepatan", "message0": "🤖 ZK-5AD Set Kecepatan %1", "args0": [ {"type": "input_value", "name": "SPEED", "check": "Number"} ], "previousStatement": null, "nextStatement": null, "colour": 35 },
-            
-            // Menghapus argumen loop di customBlocks
-            { "type": "zk5ad_maju", "message0": "🤖 ZK-5AD Maju | Putaran %1", "args0": [ {"type": "input_value", "name": "PUTARAN"} ], "previousStatement": null, "nextStatement": null, "colour": 35 },
-            { "type": "zk5ad_mundur", "message0": "🤖 ZK-5AD Mundur | Putaran %1", "args0": [ {"type": "input_value", "name": "PUTARAN"} ], "previousStatement": null, "nextStatement": null, "colour": 35 },
-            { "type": "zk5ad_kanan", "message0": "🤖 ZK-5AD Putar Kanan | Derajat %1", "args0": [ {"type": "input_value", "name": "DERAJAT"} ], "previousStatement": null, "nextStatement": null, "colour": 35 },
-            { "type": "zk5ad_kiri", "message0": "🤖 ZK-5AD Putar Kiri | Derajat %1", "args0": [ {"type": "input_value", "name": "DERAJAT"} ], "previousStatement": null, "nextStatement": null, "colour": 35 },
+            { "type": "zk5ad_maju", "message0": "🤖 ZK-5AD Maju", "previousStatement": null, "nextStatement": null, "colour": 35 },
+            { "type": "zk5ad_mundur", "message0": "🤖 ZK-5AD Mundur", "previousStatement": null, "nextStatement": null, "colour": 35 },
+            { "type": "zk5ad_kanan", "message0": "🤖 ZK-5AD Putar Kanan", "previousStatement": null, "nextStatement": null, "colour": 35 },
+            { "type": "zk5ad_kiri", "message0": "🤖 ZK-5AD Putar Kiri", "previousStatement": null, "nextStatement": null, "colour": 35 },
             { "type": "zk5ad_berhenti", "message0": "🤖 ZK-5AD Berhenti", "previousStatement": null, "nextStatement": null, "colour": 35 },
 
             { "type": "arduino_setup", "message0": "void setup() %1 %2", "args0": [ {"type": "input_dummy"}, {"type": "input_statement", "name": "DO"} ], "colour": 120 },
@@ -165,14 +219,76 @@
             { "type": "arduino_call_function_return_2", "message0": "Hasil %1( %2 , %3 )", "args0": [ {"type": "field_input", "name": "FUNC_NAME", "text": "fungsiKu"}, {"type": "input_value", "name": "ARG1"}, {"type": "input_value", "name": "ARG2"} ], "output": null, "colour": 290 },
             { "type": "arduino_call_function_return_3", "message0": "Hasil %1( %2 , %3 , %4 )", "args0": [ {"type": "field_input", "name": "FUNC_NAME", "text": "fungsiKu"}, {"type": "input_value", "name": "ARG1"}, {"type": "input_value", "name": "ARG2"}, {"type": "input_value", "name": "ARG3"} ], "output": null, "colour": 290 },
 
-            { "type": "arduino_digital_write", "message0": "Set Pin %1 ke %2", "args0": [ {"type": "field_number", "name": "PIN", "value": 13}, {"type": "field_dropdown", "name": "STATE", "options": [["HIGH", "HIGH"], ["LOW", "LOW"]]} ], "previousStatement": null, "nextStatement": null, "colour": 230 },
             { "type": "arduino_delay", "message0": "Tunggu %1 ms", "args0": [ {"type": "field_number", "name": "TIME", "value": 1000} ], "previousStatement": null, "nextStatement": null, "colour": 230 },
             { "type": "serial_begin", "message0": "Serial.begin(%1)", "args0": [ {"type": "field_dropdown", "name": "BAUD", "options": [["9600", "9600"], ["115200", "115200"]]} ], "previousStatement": null, "nextStatement": null, "colour": 160 },
             { "type": "serial_print", "message0": "Serial.print(%1)", "args0": [ {"type": "input_value", "name": "VAL"} ], "previousStatement": null, "nextStatement": null, "colour": 160 },
             { "type": "serial_println", "message0": "Serial.println(%1)", "args0": [ {"type": "input_value", "name": "VAL"} ], "previousStatement": null, "nextStatement": null, "colour": 160 }
         ];
-
         Blockly.defineBlocksWithJsonArray(customBlocks);
+
+        // ==========================================
+        // 1.5 DEFINISI BENTUK BLOK (DINAMIS VIA JS)
+        // ==========================================
+        Blockly.Blocks['zk5ad_init'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("🤖 ZK-5AD Init Pin | PIN1")
+                    .appendField(new Blockly.FieldDropdown(getAnalogWritePins), "PIN1")
+                    .appendField("| PIN2")
+                    .appendField(new Blockly.FieldDropdown(getAnalogWritePins), "PIN2")
+                    .appendField("| PIN3")
+                    .appendField(new Blockly.FieldDropdown(getAnalogWritePins), "PIN3")
+                    .appendField("| PIN4")
+                    .appendField(new Blockly.FieldDropdown(getAnalogWritePins), "PIN4");
+                this.setColour(35);
+            }
+        };
+
+        Blockly.Blocks['arduino_digital_write'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Set Digital Pin")
+                    .appendField(new Blockly.FieldDropdown(getDigitalPins), "PIN")
+                    .appendField("ke")
+                    .appendField(new Blockly.FieldDropdown([["HIGH", "HIGH"], ["LOW", "LOW"]]), "STATE");
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(230);
+            }
+        };
+
+        Blockly.Blocks['arduino_digital_read'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Baca Digital Pin")
+                    .appendField(new Blockly.FieldDropdown(getDigitalPins), "PIN");
+                this.setOutput(true, null);
+                this.setColour(230);
+            }
+        };
+
+        Blockly.Blocks['arduino_analog_write'] = {
+            init: function() {
+                this.appendValueInput("VAL")
+                    .setCheck("Number")
+                    .appendField("Set Analog (PWM) Pin")
+                    .appendField(new Blockly.FieldDropdown(getAnalogWritePins), "PIN")
+                    .appendField("ke Nilai");
+                this.setPreviousStatement(true, null);
+                this.setNextStatement(true, null);
+                this.setColour(230);
+            }
+        };
+
+        Blockly.Blocks['arduino_analog_read'] = {
+            init: function() {
+                this.appendDummyInput()
+                    .appendField("Baca Analog Pin")
+                    .appendField(new Blockly.FieldDropdown(getAnalogReadPins), "PIN");
+                this.setOutput(true, null);
+                this.setColour(230);
+            }
+        };
 
         // ==========================================
         // 2. ATURAN GENERATOR KODE ARDUINO
@@ -185,13 +301,10 @@
 
         arduinoGen.forBlock['zk5ad_init'] = () => ""; 
         arduinoGen.forBlock['zk5ad_kecepatan'] = (b) => `setKecepatanMotor(${arduinoGen.valueToCode(b, 'SPEED', 0) || '255'});\n`;
-        
-        // Memperbarui pemanggil fungsi
-        arduinoGen.forBlock['zk5ad_maju'] = (b) => `motorMaju(${arduinoGen.valueToCode(b, 'PUTARAN', 0) || '1'});\n`;
-        arduinoGen.forBlock['zk5ad_mundur'] = (b) => `motorMundur(${arduinoGen.valueToCode(b, 'PUTARAN', 0) || '1'});\n`;
-        arduinoGen.forBlock['zk5ad_kanan'] = (b) => `motorKanan(${arduinoGen.valueToCode(b, 'DERAJAT', 0) || '90'});\n`;
-        arduinoGen.forBlock['zk5ad_kiri'] = (b) => `motorKiri(${arduinoGen.valueToCode(b, 'DERAJAT', 0) || '90'});\n`;
-        
+        arduinoGen.forBlock['zk5ad_maju'] = (b) => `motorMaju();\n`;
+        arduinoGen.forBlock['zk5ad_mundur'] = (b) => `motorMundur();\n`;
+        arduinoGen.forBlock['zk5ad_kanan'] = (b) => `motorKanan();\n`;
+        arduinoGen.forBlock['zk5ad_kiri'] = (b) => `motorKiri();\n`;
         arduinoGen.forBlock['zk5ad_berhenti'] = (b) => `motorBerhenti();\n`;
 
         arduinoGen.forBlock['arduino_setup'] = () => ""; 
@@ -216,13 +329,19 @@
         arduinoGen.forBlock['arduino_call_function_return_2'] = (b) => [`${b.getFieldValue('FUNC_NAME')}(${arduinoGen.valueToCode(b, 'ARG1', 0) || '0'}, ${arduinoGen.valueToCode(b, 'ARG2', 0) || '0'})`, 0];
         arduinoGen.forBlock['arduino_call_function_return_3'] = (b) => [`${b.getFieldValue('FUNC_NAME')}(${arduinoGen.valueToCode(b, 'ARG1', 0) || '0'}, ${arduinoGen.valueToCode(b, 'ARG2', 0) || '0'}, ${arduinoGen.valueToCode(b, 'ARG3', 0) || '0'})`, 0];
 
+        // Generator Blok I/O Dinamis
+        arduinoGen.forBlock['arduino_digital_write'] = (b) => `digitalWrite(${b.getFieldValue('PIN')}, ${b.getFieldValue('STATE')});\n`;
+        arduinoGen.forBlock['arduino_digital_read'] = (b) => [`digitalRead(${b.getFieldValue('PIN')})`, 0];
+        arduinoGen.forBlock['arduino_analog_write'] = (b) => `analogWrite(${b.getFieldValue('PIN')}, ${arduinoGen.valueToCode(b, 'VAL', 0) || '0'});\n`;
+        arduinoGen.forBlock['arduino_analog_read'] = (b) => [`analogRead(${b.getFieldValue('PIN')})`, 0];
+        arduinoGen.forBlock['arduino_delay'] = (b) => `delay(${b.getFieldValue('TIME')});\n`;
+
         arduinoGen.forBlock['math_number'] = (b) => [b.getFieldValue('NUM'), 0];
         arduinoGen.forBlock['math_arithmetic'] = function(b) { return [`${arduinoGen.valueToCode(b, 'A', 0) || '0'} ${{ 'ADD': '+', 'MINUS': '-', 'MULTIPLY': '*', 'DIVIDE': '/', 'POWER': '^' }[b.getFieldValue('OP')]} ${arduinoGen.valueToCode(b, 'B', 0) || '0'}`, 0]; };
         arduinoGen.forBlock['logic_boolean'] = (b) => [b.getFieldValue('BOOL') === 'TRUE' ? 'true' : 'false', 0];
         arduinoGen.forBlock['controls_if'] = (b) => `if (${arduinoGen.valueToCode(b, 'IF0', 0) || 'false'}) {\n${arduinoGen.statementToCode(b, 'DO0')}}\n`;
         arduinoGen.forBlock['logic_compare'] = (b) => [`${arduinoGen.valueToCode(b, 'A', 0) || '0'} ${{ 'EQ': '==', 'NEQ': '!=', 'LT': '<', 'LTE': '<=', 'GT': '>', 'GTE': '>=' }[b.getFieldValue('OP')]} ${arduinoGen.valueToCode(b, 'B', 0) || '0'}`, 0];
-        arduinoGen.forBlock['arduino_digital_write'] = (b) => `digitalWrite(${b.getFieldValue('PIN')}, ${b.getFieldValue('STATE')});\n`;
-        arduinoGen.forBlock['arduino_delay'] = (b) => `delay(${b.getFieldValue('TIME')});\n`;
+        
         arduinoGen.forBlock['serial_begin'] = (b) => `Serial.begin(${b.getFieldValue('BAUD')});\n`;
         arduinoGen.forBlock['serial_print'] = (b) => `Serial.print(${arduinoGen.valueToCode(b, 'VAL', 0) || '""'});\n`;
         arduinoGen.forBlock['serial_println'] = (b) => `Serial.println(${arduinoGen.valueToCode(b, 'VAL', 0) || '""'});\n`;
@@ -261,16 +380,29 @@
                 
                 var isUsingZK5AD = false;
                 var p1 = "5", p2 = "6", p3 = "9", p4 = "10"; 
+                var autoPinModes = new Set();
 
                 for (var k = 0; k < allBlocks.length; k++) {
                     if (allBlocks[k].type.startsWith('zk5ad_')) isUsingZK5AD = true;
                     if (allBlocks[k].type === 'zk5ad_init') {
-                        p1 = arduinoGen.valueToCode(allBlocks[k], 'PIN1', 0) || "5";
-                        p2 = arduinoGen.valueToCode(allBlocks[k], 'PIN2', 0) || "6";
-                        p3 = arduinoGen.valueToCode(allBlocks[k], 'PIN3', 0) || "9";
-                        p4 = arduinoGen.valueToCode(allBlocks[k], 'PIN4', 0) || "10";
+                        p1 = allBlocks[k].getFieldValue('PIN1') || "5";
+                        p2 = allBlocks[k].getFieldValue('PIN2') || "6";
+                        p3 = allBlocks[k].getFieldValue('PIN3') || "9";
+                        p4 = allBlocks[k].getFieldValue('PIN4') || "10";
+                    }
+                    
+                    // Injeksi otomatis pinMode berdasarkan pemakaian
+                    if (allBlocks[k].type === 'arduino_digital_write' || allBlocks[k].type === 'arduino_analog_write') {
+                        autoPinModes.add(`  pinMode(${allBlocks[k].getFieldValue('PIN')}, OUTPUT);\n`);
+                    } else if (allBlocks[k].type === 'arduino_digital_read') {
+                        // Tidak semua pin perlu secara eksplisit diset INPUT, tapi best practice:
+                        // Kita kecualikan pin A0 dkk jika dibaca menggunakan analogRead, 
+                        // tapi untuk digitalRead kita set INPUT
+                        autoPinModes.add(`  pinMode(${allBlocks[k].getFieldValue('PIN')}, INPUT);\n`);
                     }
                 }
+
+                autoPinModes.forEach(mode => setupCode += mode);
 
                 for (var i = 0; i < topBlocks.length; i++) {
                     var block = topBlocks[i];
@@ -312,48 +444,35 @@
                                   `  pinMode(PIN4, OUTPUT);\n\n`;
                     setupCode = zkSetup + setupCode;
 
-                    // Mengubah fungsi agar tidak menggunakan for loop
                     var zkFuncs = `// ==========================================\n` +
-                                  `// FUNGSI KONTROL ROBOT ZK-5AD\n` +
+                                  `// FUNGSI KONTROL ROBOT ZK-5AD (NON-BLOCKING)\n` +
                                   `// ==========================================\n` +
                                   `void setKecepatanMotor(int speed) {\n` +
                                   `  motorSpeed = speed;\n` +
                                   `}\n\n` +
-                                  `void motorMaju(int putaran) {\n` +
+                                  `void motorMaju() {\n` +
                                   `  analogWrite(PIN1, motorSpeed);\n` +
                                   `  analogWrite(PIN2, 0);\n` +
                                   `  analogWrite(PIN3, motorSpeed);\n` +
                                   `  analogWrite(PIN4, 0);\n` +
-                                  `  delay(putaran * 1000); // Asumsi 1000ms per putaran penuh\n` +
-                                  `  motorBerhenti();\n` +
-                                  `  delay(100);\n` +
                                   `}\n\n` +
-                                  `void motorMundur(int putaran) {\n` +
+                                  `void motorMundur() {\n` +
                                   `  analogWrite(PIN1, 0);\n` +
                                   `  analogWrite(PIN2, motorSpeed);\n` +
                                   `  analogWrite(PIN3, 0);\n` +
                                   `  analogWrite(PIN4, motorSpeed);\n` +
-                                  `  delay(putaran * 1000);\n` +
-                                  `  motorBerhenti();\n` +
-                                  `  delay(100);\n` +
                                   `}\n\n` +
-                                  `void motorKanan(int derajat) {\n` +
+                                  `void motorKanan() {\n` +
                                   `  analogWrite(PIN1, 0);\n` +
                                   `  analogWrite(PIN2, motorSpeed);\n` +
                                   `  analogWrite(PIN3, motorSpeed);\n` +
                                   `  analogWrite(PIN4, 0);\n` +
-                                  `  delay(derajat * 5); // Asumsi: 90 derajat = 450ms\n` +
-                                  `  motorBerhenti();\n` +
-                                  `  delay(100);\n` +
                                   `}\n\n` +
-                                  `void motorKiri(int derajat) {\n` +
+                                  `void motorKiri() {\n` +
                                   `  analogWrite(PIN1, motorSpeed);\n` +
                                   `  analogWrite(PIN2, 0);\n` +
                                   `  analogWrite(PIN3, 0);\n` +
                                   `  analogWrite(PIN4, motorSpeed);\n` +
-                                  `  delay(derajat * 5);\n` +
-                                  `  motorBerhenti();\n` +
-                                  `  delay(100);\n` +
                                   `}\n\n` +
                                   `void motorBerhenti() {\n` +
                                   `  analogWrite(PIN1, 0);\n` +
@@ -392,6 +511,9 @@
             const btn = document.getElementById('compileBtn');
             const outputArea = document.getElementById('outputArea');
             const code = outputArea.innerText || outputArea.textContent; 
+            
+            // Mengirim jenis board agar app.py tahu FQBN mana yang dipakai compiler
+            const selectedBoard = document.getElementById('boardSelect').value;
 
             btn.innerText = "⏳ Sedang Compile...";
             btn.disabled = true;
@@ -400,7 +522,7 @@
                 const response = await fetch('/compile', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ code: code })
+                    body: JSON.stringify({ code: code, board: selectedBoard })
                 });
                 
                 const result = await response.json();
